@@ -547,7 +547,7 @@ export default function ChefIngredientesApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 2000,
+          max_tokens: 3500,
           system:
             `${recipeMode === "tradicional"
               ? `Eres un chef experto en cocina tradicional del mundo, con profundo conocimiento de recetas auténticas y sus técnicas originales. El usuario quiere una receta TRADICIONAL Y AUTÉNTICA de la cocina "${cuisinePref.trim()}" — NO inventes una fusión, NO mezcles técnicas ni sabores de otras cocinas, NO seas creativo con el concepto: da el platillo tradicional real de esa cocina que mejor se pueda preparar con lo disponible. Identifica los ingredientes disponibles (en la foto, en el texto del usuario, o ambos). Si tiene ingredientes que no son parte de esa receta tradicional, simplemente no los uses — prioriza la autenticidad sobre aprovechar todo lo que tiene. Si falta algún ingrediente esencial y típico de la receta tradicional, inclúyelo en ingredientes_por_comprar.`
