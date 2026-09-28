@@ -44,10 +44,11 @@ const MAX_DISH_THUMBS = 30;
 // imprime, como "publicidad" gratis hacia la app.
 const APP_LINK = "https://fusion-y-fogon.netlify.app";
 // Aviso de Privacidad — el nombre visible es "Fusión & Fogón" (nombre
-// comercial); falta completar el correo/domicilio de contacto. El nombre
-// legal y RFC quedan solo para trámites privados (SAT, banco, procesador
-// de pagos), nunca se publican aquí.
-const PRIVACY_NOTICE = `Responsable del tratamiento de tus datos: Fusión & Fogón, con domicilio/contacto en [CORREO PENDIENTE].
+// comercial) y el contacto es contacto@villadeapps.com (reenvía a la
+// dueña). El nombre legal y RFC quedan solo para trámites privados (SAT,
+// banco, procesador de pagos), nunca se publican aquí. PENDIENTE: que un
+// abogado confirme si el aviso debe incluir además un domicilio físico.
+const PRIVACY_NOTICE = `Responsable del tratamiento de tus datos: Fusión & Fogón, con domicilio/contacto en contacto@villadeapps.com.
 
 Datos que recabamos: fotos de ingredientes que subas, tus preferencias de receta, notas personales y tu historial de recetas generadas.
 
@@ -55,7 +56,7 @@ Para qué los usamos: crear las recetas personalizadas que pides, guardar tu his
 
 Con quién se comparten: las fotos e ingredientes que envías se procesan a través de Anthropic (proveedor de la tecnología de inteligencia artificial que genera las recetas), únicamente para ese fin. No vendemos ni compartimos tus datos con fines de publicidad de terceros.
 
-Tus derechos (ARCO): puedes Acceder, Rectificar, Cancelar u Oponerte al uso de tus datos personales escribiendo a [CORREO PENDIENTE].
+Tus derechos (ARCO): puedes Acceder, Rectificar, Cancelar u Oponerte al uso de tus datos personales escribiendo a contacto@villadeapps.com.
 
 Cambios a este aviso: cualquier actualización se publicará en esta misma pantalla dentro de la app.`;
 const MAX_HISTORY = 12;
@@ -387,10 +388,10 @@ export default function ChefIngredientesApp() {
   // conectados a Stripe — por ahora solo explican qué va a pasar aquí.
   // Ver README del proyecto para el paso de conectar Stripe.
   const handleSubscribe = () => {
-    setPaywallMessage("Escríbenos por WhatsApp para pagar tu suscripción — te mandamos un código de acceso para desbloquear la app.");
+    setPaywallMessage("Escríbenos a contacto@villadeapps.com para pagar tu suscripción — te mandamos un código de acceso para desbloquear la app.");
   };
   const handleBuyOneRecipe = () => {
-    setPaywallMessage("Escríbenos por WhatsApp para comprar tu paquete de 5 recetas — te mandamos un código de acceso para desbloquear la app.");
+    setPaywallMessage("Escríbenos a contacto@villadeapps.com para comprar tu paquete de 5 recetas — te mandamos un código de acceso para desbloquear la app.");
   };
 
   const redeemAccessCode = async () => {
