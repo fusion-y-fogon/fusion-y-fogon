@@ -59,6 +59,17 @@ Con quién se comparten: las fotos e ingredientes que envías se procesan a trav
 Tus derechos (ARCO): puedes Acceder, Rectificar, Cancelar u Oponerte al uso de tus datos personales escribiendo a contacto@villadeapps.com.
 
 Cambios a este aviso: cualquier actualización se publicará en esta misma pantalla dentro de la app.`;
+// Error de receta con un código de una letra, para saber por qué falló:
+// T = el servidor tardó demasiado (límite de tiempo), L = la receta salió
+// demasiado larga y se cortó, J = respuesta con formato inválido,
+// A = el servicio de IA está ocupado o rechazó la petición.
+class RecipeError extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+}
+
 const MAX_HISTORY = 12;
 const MAX_FAVORITES = 30;
 
@@ -543,29 +554,61 @@ export default function ChefIngredientesApp() {
         text: `${ingredientsLine} Porciones deseadas: ${servings}. Preferencia de cocina: ${cuisinePref.trim() || "sorpréndeme, la que mejor combine"}. Restricciones o alergias: ${restrictions.trim() || "ninguna"}.${extraInstruction && extraInstruction.trim() ? ` ${extraInstruction.trim()}` : ""}`,
       });
 
-      const response = await fetch("/.netlify/functions/anthropic-proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const requestBody = JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 3500,
+          max_tokens: 4096,
           system:
             `${recipeMode === "tradicional"
               ? `Eres un chef experto en cocina tradicional del mundo, con profundo conocimiento de recetas auténticas y sus técnicas originales. El usuario quiere una receta TRADICIONAL Y AUTÉNTICA de la cocina "${cuisinePref.trim()}" — NO inventes una fusión, NO mezcles técnicas ni sabores de otras cocinas, NO seas creativo con el concepto: da el platillo tradicional real de esa cocina que mejor se pueda preparar con lo disponible. Identifica los ingredientes disponibles (en la foto, en el texto del usuario, o ambos). Si tiene ingredientes que no son parte de esa receta tradicional, simplemente no los uses — prioriza la autenticidad sobre aprovechar todo lo que tiene. Si falta algún ingrediente esencial y típico de la receta tradicional, inclúyelo en ingredientes_por_comprar.`
               : `Eres un chef con formación de alta cocina, inspirado en chefs galardonados con estrellas Michelin y premios por técnicas de vanguardia. Identifica los ingredientes disponibles (en la foto, en el texto del usuario, o ambos) y crea UNA receta original y deliciosa que combine sabores y técnicas de distintas cocinas del mundo (italiana, marroquí, griega, colombiana, peruana, mexicana, española, francesa, suiza, u otras si el maridaje resulta mejor), priorizando la fusión de sabores más deliciosa posible con lo disponible.`
-            } En ninguna parte de la receta (pasos, técnica, tip, nombre o inspiración) menciones el nombre de ningún chef, persona, restaurante o marca real — describe técnicas y estilos siempre de forma genérica (ej. "alta cocina de vanguardia", "cocina nórdica contemporánea") sin nombrar a nadie. Considera las porciones, la preferencia de cocina y las restricciones que indique el usuario si las hay. Si la receta incluye ave, cerdo, carne molida o mariscos, en el paso de cocción explica en lenguaje muy sencillo, sin dar por hecho que la persona sabe de grados ni tiene termómetro, cómo saber que ya está bien cocida: primero da una señal que se pueda ver (por ejemplo: "corta la parte más gruesa; los jugos deben salir claros y por dentro no debe haber nada rosado"; en carne molida aclara que no basta guiarse por el color). Después, como dato opcional para quien tenga termómetro de cocina, explica cómo usarlo y la temperatura segura (por ejemplo: "si tienes termómetro de cocina, clávalo en la parte más gruesa sin tocar hueso: debe marcar 74 °C en pollo y carne molida, 63 °C en cerdo entero"). Calcula y especifica la cantidad exacta de cada ingrediente (gramos, mililitros, piezas, cucharadas, etc.) ajustada al número de porciones solicitado — nunca dejes un ingrediente sin cantidad.${onlyWhatIHave ? " IMPORTANTE: el usuario solo quiere usar lo que ya tiene — no propongas ingredientes adicionales que deba comprar, salvo sal, aceite, agua o especias básicas que casi cualquier cocina ya tiene; en ese caso ingredientes_por_comprar debe ir vacío." : ""} Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin backticks, con exactamente estas claves: nombre_receta (string, nombre evocador del platillo${recipeMode === "tradicional" ? ", usa el nombre tradicional real del platillo" : ""}), inspiracion (string breve, ${recipeMode === "tradicional" ? "origen o historia breve del platillo tradicional — NO menciones fusión ni mezcla de cocinas" : "qué cocinas o técnicas se fusionan y por qué combinan bien"}), tiempo_total (string breve, ej '35 min'), porciones (number), ingredientes_detectados (arreglo de strings, cada uno con su cantidad exacta ajustada a las porciones, ej. '250 g de pechuga de pollo', ingredientes identificados ya sea de la foto o del texto), ingredientes_por_comprar (arreglo de strings con cantidad exacta ajustada a las porciones, ingredientes adicionales necesarios; arreglo vacío si no falta nada), pasos (arreglo de 4 a 7 strings cortos y claros, pasos de preparación), tecnica_destacada (string, 1-2 frases sobre una técnica ${recipeMode === "tradicional" ? "tradicional y auténtica de esa cocina" : "de alta cocina o vanguardia"} que se usa y por qué eleva el platillo — descríbela de forma genérica, por ejemplo "una técnica de sellado usada en la alta cocina de vanguardia"; NO menciones el nombre de ningún chef, persona o restaurante real, ni real ni inventado, bajo ninguna circunstancia), tip_presentacion (string, 1 frase sobre cómo emplatar o servir, tampoco menciones nombres de chefs o personas reales), tecnica_busqueda (string de 2 a 5 palabras en español para buscar en YouTube cómo se hace la técnica destacada, ej. "sellar carne en sartén caliente" o "emulsionar una vinagreta"; SOLO la técnica, sin el nombre del platillo ni de personas), terminos_tecnicos (arreglo de 0 a 5 objetos {termino, significado} — SOLO para palabras de jerga de chef que usaste en tecnica_destacada, tip_presentacion o pasos que una persona sin formación culinaria (ej. un ama de casa o alguien de servicio doméstico) probablemente no entienda, como "quenelle", "reacción de Maillard", "emulsionar", "blanquear", "desglasar", nombres de chefs, técnicas francesas, etc. — el campo "termino" debe ser exactamente la palabra o frase tal como aparece en el texto (para poder resaltarla), y "significado" una explicación de 1 frase en español sencillo y cotidiano, sin más jerga; si no usaste ningún término difícil, deja el arreglo vacío).`,
+            } En ninguna parte de la receta (pasos, técnica, tip, nombre o inspiración) menciones el nombre de ningún chef, persona, restaurante o marca real — describe técnicas y estilos siempre de forma genérica (ej. "alta cocina de vanguardia", "cocina nórdica contemporánea") sin nombrar a nadie. Considera las porciones, la preferencia de cocina y las restricciones que indique el usuario si las hay. Si la receta incluye ave, cerdo, carne molida o mariscos, en el paso de cocción explica en máximo 3 frases y en lenguaje muy sencillo, sin dar por hecho que la persona sabe de grados ni tiene termómetro, cómo saber que ya está bien cocida: primero da una señal que se pueda ver (por ejemplo: "corta la parte más gruesa; los jugos deben salir claros y por dentro no debe haber nada rosado"; en carne molida aclara que no basta guiarse por el color). Después, como dato opcional para quien tenga termómetro de cocina, explica cómo usarlo y la temperatura segura (por ejemplo: "si tienes termómetro de cocina, clávalo en la parte más gruesa sin tocar hueso: debe marcar 74 °C en pollo y carne molida, 63 °C en cerdo entero"). Calcula y especifica la cantidad exacta de cada ingrediente (gramos, mililitros, piezas, cucharadas, etc.) ajustada al número de porciones solicitado — nunca dejes un ingrediente sin cantidad.${onlyWhatIHave ? " IMPORTANTE: el usuario solo quiere usar lo que ya tiene — no propongas ingredientes adicionales que deba comprar, salvo sal, aceite, agua o especias básicas que casi cualquier cocina ya tiene; en ese caso ingredientes_por_comprar debe ir vacío." : ""} Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin backticks, con exactamente estas claves: nombre_receta (string, nombre evocador del platillo${recipeMode === "tradicional" ? ", usa el nombre tradicional real del platillo" : ""}), inspiracion (1 sola frase de máximo 25 palabras, ${recipeMode === "tradicional" ? "origen o historia breve del platillo tradicional — NO menciones fusión ni mezcla de cocinas" : "qué cocinas o técnicas se fusionan y por qué combinan bien"}), tiempo_total (string breve, ej '35 min'), porciones (number), ingredientes_detectados (arreglo de strings, cada uno con su cantidad exacta ajustada a las porciones, ej. '250 g de pechuga de pollo', ingredientes identificados ya sea de la foto o del texto), ingredientes_por_comprar (arreglo de strings con cantidad exacta ajustada a las porciones, ingredientes adicionales necesarios; arreglo vacío si no falta nada), pasos (arreglo de 4 a 6 strings, cada uno de máximo 2 frases cortas y claras, pasos de preparación), tecnica_destacada (string, 1 frase de máximo 35 palabras sobre una técnica ${recipeMode === "tradicional" ? "tradicional y auténtica de esa cocina" : "de alta cocina o vanguardia"} que se usa y por qué eleva el platillo — descríbela de forma genérica, por ejemplo "una técnica de sellado usada en la alta cocina de vanguardia"; NO menciones el nombre de ningún chef, persona o restaurante real, ni real ni inventado, bajo ninguna circunstancia), tip_presentacion (string, 1 frase corta sobre cómo emplatar o servir, tampoco menciones nombres de chefs o personas reales), tecnica_busqueda (string de 2 a 5 palabras en español para buscar en YouTube cómo se hace la técnica destacada, ej. "sellar carne en sartén caliente" o "emulsionar una vinagreta"; SOLO la técnica, sin el nombre del platillo ni de personas), terminos_tecnicos (arreglo de 0 a 3 objetos {termino, significado} — SOLO para palabras de jerga de chef que usaste en tecnica_destacada, tip_presentacion o pasos que una persona sin formación culinaria (ej. un ama de casa o alguien de servicio doméstico) probablemente no entienda, como "quenelle", "reacción de Maillard", "emulsionar", "blanquear", "desglasar", nombres de chefs, técnicas francesas, etc. — el campo "termino" debe ser exactamente la palabra o frase tal como aparece en el texto (para poder resaltarla), y "significado" una explicación de máximo 15 palabras en español sencillo y cotidiano, sin más jerga; si no usaste ningún término difícil, deja el arreglo vacío).`,
           messages: [{ role: "user", content }],
-        }),
       });
-      const data = await response.json();
-      const textBlock = data?.content?.find((b) => b.type === "text")?.text || "";
-      let cleaned = textBlock.replace(/```json|```/g, "").trim();
-      const firstBrace = cleaned.indexOf("{");
-      const lastBrace = cleaned.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+
+      const attempt = async () => {
+        const response = await fetch("/.netlify/functions/anthropic-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+        });
+        let data = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null; // respuesta que no es JSON: casi siempre el límite de tiempo del servidor
+        }
+        if (!data) throw new RecipeError("T");
+        if (!response.ok || data.type === "error") {
+          throw new RecipeError(response.status === 502 || response.status === 504 ? "T" : "A");
+        }
+        if (data.stop_reason === "max_tokens") throw new RecipeError("L");
+        const textBlock = data?.content?.find((b) => b.type === "text")?.text || "";
+        let cleaned = textBlock.replace(/```json|```/g, "").trim();
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+        }
+        try {
+          return JSON.parse(cleaned);
+        } catch {
+          throw new RecipeError("J");
+        }
+      };
+
+      // Un reintento automático si la receta llegó cortada, con formato
+      // inválido o el servidor tardó demasiado; la persona no tiene que
+      // volver a tocar el botón. Solo se descuenta una receta gratis si sale.
+      let parsed;
+      try {
+        parsed = await attempt();
+      } catch (firstErr) {
+        if (firstErr instanceof RecipeError && firstErr.code !== "A") {
+          parsed = await attempt();
+        } else {
+          throw firstErr;
+        }
       }
-      const parsed = JSON.parse(cleaned);
       const entryId = `${Date.now()}`;
       setResult(parsed);
       generateDishImage(parsed, entryId);
@@ -578,8 +621,16 @@ export default function ChefIngredientesApp() {
       setHistory(next);
       window.storage.set(HISTORY_KEY, JSON.stringify(next), false).catch(() => {});
     } catch (err) {
-      if (err instanceof SyntaxError) {
-        setError("La receta se generó incompleta. Intenta de nuevo.");
+      if (err instanceof RecipeError) {
+        const mensajes = {
+          T: "La receta tardó demasiado en generarse. Intenta de nuevo.",
+          L: "La receta salió demasiado larga y se cortó. Intenta de nuevo.",
+          J: "La receta se generó incompleta. Intenta de nuevo.",
+          A: "El servicio está muy ocupado en este momento. Intenta de nuevo en un minuto.",
+        };
+        setError(`${mensajes[err.code] || "No se pudo crear la receta. Intenta de nuevo."} [${err.code}]`);
+      } else if (err instanceof SyntaxError) {
+        setError("La receta se generó incompleta. Intenta de nuevo. [J]");
       } else if (err instanceof TypeError) {
         setError("No hay conexión con el servicio. Revisa tu internet e intenta de nuevo.");
       } else {
